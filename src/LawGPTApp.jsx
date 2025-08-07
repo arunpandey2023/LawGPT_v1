@@ -22,7 +22,7 @@ const LawGPTApp = () => {
       const response = await axios.post("https://mailabs.app.n8n.cloud/webhook-test/query", {
         message: input
       });
-      const botMessage = response.data?.message?.content || "Sorry, I couldn't understand that.";
+      const botMessage = response.data?.output || "Sorry, I couldn't understand that.";
       setMessages(prev => [...prev, { type: "bot", text: botMessage }]);
     } catch (error) {
       console.error("Error fetching response:", error);
