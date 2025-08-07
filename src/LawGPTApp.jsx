@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from "react";
 import axios from "axios";
 
@@ -8,6 +7,8 @@ const LawGPTApp = () => {
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showTools, setShowTools] = useState(false);
+  const [showShare, setShowShare] = useState(false);
   const fileInputRef = useRef(null);
 
   const handleSend = async () => {
@@ -51,13 +52,17 @@ const LawGPTApp = () => {
     }
   };
 
+  const handleVoiceClick = () => {
+    alert("Voice input feature coming soon!");
+  };
+
   const newChat = () => setMessages([{ type: "bot", text: "New chat started. How can I assist you?" }]);
   const searchChat = () => alert("Search chat functionality is under development.");
   const openLibrary = () => window.open("https://njdg.ecourts.gov.in/njdg_v3/", "_blank");
   const openRepository = () => alert("Case repository opening soon.");
 
   return (
-    <div className="flex h-screen bg-gray-900 text-white">
+    <div className="flex h-screen bg-gray-900 text-white relative">
       {/* Sidebar */}
       <div className="w-64 bg-gray-800 p-4 flex flex-col justify-between">
         <div>
@@ -79,7 +84,7 @@ const LawGPTApp = () => {
       </div>
 
       {/* Chat Panel */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col relative">
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {messages.map((msg, index) => (
             <div
@@ -94,9 +99,32 @@ const LawGPTApp = () => {
           {loading && <div className="text-gray-400">LawGPT is typing...</div>}
         </div>
 
+        {/* Tool Popup */}
+        {showTools && (
+          <div className="absolute bottom-20 left-20 bg-gray-800 border border-gray-700 p-3 rounded z-10">
+            <ul className="space-y-2 text-sm">
+              <li className="cursor-pointer">⚙️ Integration</li>
+              <li className="cursor-pointer">📁 Import/Export Tools</li>
+              <li className="cursor-pointer">🖨️ Print</li>
+              <li className="cursor-pointer">💾 Save</li>
+            </ul>
+          </div>
+        )}
+
+        {/* Share Popup */}
+        {showShare && (
+          <div className="absolute bottom-20 left-36 bg-gray-800 border border-gray-700 p-3 rounded z-10">
+            <ul className="space-y-2 text-sm">
+              <li className="cursor-pointer">💬 Slack</li>
+              <li className="cursor-pointer">📱 WhatsApp</li>
+              <li className="cursor-pointer">✉️ Email</li>
+              <li className="cursor-pointer">📤 Drive</li>
+            </ul>
+          </div>
+        )}
+
         {/* Input Area */}
         <div className="p-4 border-t border-gray-700 flex items-center gap-2">
-          {/* Upload Icon */}
           <button onClick={() => fileInputRef.current.click()} className="text-lg">➕</button>
           <input
             type="file"
@@ -105,9 +133,9 @@ const LawGPTApp = () => {
             onChange={handleFileUpload}
             className="hidden"
           />
-          <button className="text-lg" title="Tools">🛠️</button>
-          <button className="text-lg" title="Voice">🎙️</button>
-          <button className="text-lg" title="Share">🔗</button>
+          <button className="text-lg" title="Tools" onClick={() => setShowTools(!showTools)}>🛠️</button>
+          <button className="text-lg" title="Voice" onClick={handleVoiceClick}>🎙️</button>
+          <button className="text-lg" title="Share" onClick={() => setShowShare(!showShare)}>🔗</button>
 
           <input
             className="flex-1 p-2 rounded-md bg-gray-800 border border-gray-700 text-white"
