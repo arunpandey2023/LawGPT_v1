@@ -133,6 +133,48 @@ const LawGPTApp = () => {
   const searchChat = () => alert("Search chat functionality is under development.");
   const openLibrary = () => window.open("https://njdg.ecourts.gov.in/njdg_v3/", "_blank");
   const openRepository = () => alert("Case repository opening soon.");
+  const escapeHtml = (str = "") =>
+    str.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  const handlePrintLast = () => {
+    const last = [...messages].reverse().find(m => m && typeof m.text === "string" && m.text.trim().length > 0);
+    if (!last) {
+      alert("No messages to print yet.");
+      return;
+    }
+    const w = window.open("", "_blank", "width=800,height=600");
+    if (!w) return;
+    const html = `<!doctype html><html><head><title>Print Chat</title>
+      <style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:24px;}
+      pre{white-space:pre-wrap;word-break:break-word;font-size:14px;}</style>
+      </head><body>
+      <h2>Last Chat Message (${last.type === "user" ? "You" : "LawGPT"})</h2>
+      <pre>${escapeHtml(last.text)}</pre>
+      <script>window.onload = () => { window.print(); setTimeout(() => window.close(), 400); }<\/script>
+      </body></html>`;
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  };
+
+  const handleSaveSession = () => {
+    if (!messages || !messages.length) {
+      alert("No messages to save yet.");
+      return;
+    }
+    const text = messages.map((m, i) => `${m.type === "user" ? "You" : "LawGPT"}: ${m.text}`).join("\n\n---\n\n");
+    const blob = new Blob([text], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const stamp = new Date().toISOString().slice(0,19).replace(/[T:]/g,"-");
+    a.href = url;
+    a.download = `lawgpt_session_${stamp}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
 
   return (
     <div className="flex h-screen bg-gray-900 text-white relative">
@@ -158,6 +200,20 @@ const LawGPTApp = () => {
 
       {/* Chat Panel */}
       <div className="flex-1 flex flex-col relative">
+        {/* Top Bar */}
+        <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800 bg-gray-900 sticky top-0 z-10">
+          <div className="text-sm text-gray-400">LawGPT Assistant</div>
+          <div className="flex items-center gap-2">
+            <button
+              className="text-sm px-2 py-1 bg-gray-800 border border-gray-700 rounded hover:bg-gray-700"
+              title="Share"
+              onClick={() => setShowShare(!showShare)}
+            >
+              🔗 Share
+            </button>
+          </div>
+        </div>
+
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {messages.map((msg, index) => (
             <div
@@ -176,17 +232,15 @@ const LawGPTApp = () => {
         {showTools && (
           <div className="absolute bottom-20 left-20 bg-gray-800 border border-gray-700 p-3 rounded z-10">
             <ul className="space-y-2 text-sm">
-              <li className="cursor-pointer">⚙️ Integration</li>
-              <li className="cursor-pointer">📁 Import/Export Tools</li>
-              <li className="cursor-pointer">🖨️ Print</li>
-              <li className="cursor-pointer">💾 Save</li>
+              <li className="cursor-pointer" onClick={handlePrintLast}>🖨️ Print last chat</li>
+              <li className="cursor-pointer" onClick={handleSaveSession}>💾 Save session as .txt</li>
             </ul>
           </div>
         )}
 
         {/* Share Popup */}
         {showShare && (
-          <div className="absolute bottom-20 left-36 bg-gray-800 border border-gray-700 p-3 rounded z-10">
+          <div className="absolute top-12 right-4 bg-gray-800 border border-gray-700 p-3 rounded z-20 shadow-lg">
             <ul className="space-y-2 text-sm">
               <li className="cursor-pointer">💬 Slack</li>
               <li className="cursor-pointer">📱 WhatsApp</li>
@@ -220,8 +274,6 @@ const LawGPTApp = () => {
           <button className="text-lg" title="Voice" onClick={handleVoiceClick}>
             {recording ? "⏺️" : "🎙️"}
           </button>
-          <button className="text-lg" title="Share" onClick={() => setShowShare(!showShare)}>🔗</button>
-
           <input
             className="flex-1 p-2 rounded-md bg-gray-800 border border-gray-700 text-white"
             placeholder="Ask me anything..."
