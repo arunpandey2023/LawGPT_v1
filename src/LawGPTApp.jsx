@@ -215,61 +215,113 @@ const LawGPTApp = () => {
   return (
     <>
       {!loggedIn ? (
-        /* ===== Auth Page (shown when not logged in) ===== */
-        <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white p-4">
-          <div className="w-full max-w-md bg-gray-800 border border-gray-700 rounded-2xl p-6 shadow-xl">
-            <h1 className="text-2xl font-semibold mb-1 text-center">Welcome to LawGPT</h1>
-            <p className="text-sm text-gray-400 mb-6 text-center">Sign in to continue</p>
-
-            <div className="flex gap-2 mb-4">
-              <button
-                onClick={() => setAuthMode("signin")}
-                className={"flex-1 px-3 py-2 rounded-md border " + (authMode === "signin" ? "bg-white text-black border-white" : "bg-gray-900 border-gray-700")}
-              >
-                Sign In
-              </button>
-              <button
-                onClick={() => setAuthMode("signup")}
-                className={"flex-1 px-3 py-2 rounded-md border " + (authMode === "signup" ? "bg-white text-black border-white" : "bg-gray-900 border-gray-700")}
-              >
-                Sign Up
-              </button>
+        
+        {/* ===== Auth Page (ChatGPT-style) ===== */}
+        <div className="min-h-screen flex items-center justify-center bg-[#0b0c10] text-white px-4">
+          <div className="w-full max-w-md">
+            {/* Brand */}
+            <div className="flex flex-col items-center mb-8">
+              <div className="h-10 w-10 rounded-full bg-gradient-to-br from-emerald-400 to-cyan-400 flex items-center justify-center shadow-lg">
+                <span className="text-black font-bold">L</span>
+              </div>
+              <h1 className="mt-4 text-2xl font-semibold tracking-tight">Sign in to LawGPT</h1>
+              <p className="mt-1 text-sm text-gray-400">Your AI legal workspace</p>
             </div>
 
-            <button
-              onClick={handleGoogleAuth}
-              className="w-full mb-4 px-4 py-2 rounded-md bg-white text-black hover:bg-gray-300 flex items-center justify-center gap-2"
-            >
-              <span>🔵</span> Continue with Google
-            </button>
+            {/* Card */}
+            <div className="rounded-2xl border border-gray-800 bg-[#0f1115] shadow-xl overflow-hidden">
+              <div className="p-6">
+                {/* Google */}
+                <button
+                  onClick={handleGoogleAuth}
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-gray-700 bg-[#111318] px-4 py-2.5 text-sm font-medium hover:bg-[#141821] transition-colors"
+                >
+                  <svg width="18" height="18" viewBox="0 0 48 48" className="-ml-1" aria-hidden="true" focusable="false">
+                    <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.8 32.6 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.3 6.1 29.4 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20c10 0 19-7.3 19-20 0-1.2-.1-2.3-.4-3.5z"/>
+                    <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 16 19 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.3 6.1 29.4 4 24 4 15.6 4 8.5 8.7 6.3 14.7z"/>
+                    <path fill="#4CAF50" d="M24 44c5.2 0 9.9-1.9 13.4-5.1l-6.2-5.1C29.2 35.6 26.8 36 24 36c-5.2 0-9.6-3.3-11.2-8l-6.6 5.1C8.4 39.3 15.6 44 24 44z"/>
+                    <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-1 2.9-3.1 5.1-5.9 6.4l6.2 5.1C38.7 36.7 44 31.8 44 24c0-1.2-.1-2.3-.4-3.5z"/>
+                  </svg>
+                  Continue with Google
+                </button>
 
-            <div className="grid gap-2 mb-2">
-              <input
-                type="email"
-                placeholder="Email"
-                className="w-full p-2 rounded-md bg-gray-900 border border-gray-700"
-                value={authEmail}
-                onChange={(e) => setAuthEmail(e.target.value)}
-              />
-              <input
-                type="password"
-                placeholder="Password"
-                className="w-full p-2 rounded-md bg-gray-900 border border-gray-700"
-                value={authPassword}
-                onChange={(e) => setAuthPassword(e.target.value)}
-              />
+                {/* Divider */}
+                <div className="relative my-5">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-gray-800"></div>
+                  </div>
+                  <div className="relative flex justify-center">
+                    <span className="bg-[#0f1115] px-2 text-xs uppercase tracking-wider text-gray-500">
+                      or
+                    </span>
+                  </div>
+                </div>
+
+                {/* Email form */}
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Email</label>
+                    <input
+                      type="email"
+                      placeholder="you@example.com"
+                      className="w-full rounded-lg bg-[#0b0d12] border border-gray-800 px-3 py-2.5 text-sm outline-none focus:border-emerald-500 transition-colors"
+                      value={authEmail}
+                      onChange={(e) => setAuthEmail(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Password</label>
+                    <input
+                      type="password"
+                      placeholder="********"
+                      className="w-full rounded-lg bg-[#0b0d12] border border-gray-800 px-3 py-2.5 text-sm outline-none focus:border-emerald-500 transition-colors"
+                      value={authPassword}
+                      onChange={(e) => setAuthPassword(e.target.value)}
+                    />
+                  </div>
+
+                  {authError && (
+                    <div className="text-red-400 text-sm">{authError}</div>
+                  )}
+
+                  {authMode === "signin" ? (
+                    <button
+                      onClick={() => handleEmailPassword("signin")}
+                      className="w-full rounded-lg bg-emerald-500 hover:bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-black transition-colors"
+                    >
+                      Sign in
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleEmailPassword("signup")}
+                      className="w-full rounded-lg bg-emerald-500 hover:bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-black transition-colors"
+                    >
+                      Create account
+                    </button>
+                  )}
+
+                  <div className="flex items-center justify-between text-xs text-gray-400">
+                    <button onClick={handleResetPassword} className="underline hover:text-gray-300">
+                      Forgot password?
+                    </button>
+                    <button
+                      onClick={() => setAuthMode(authMode === "signin" ? "signup" : "signin")}
+                      className="underline hover:text-gray-300"
+                    >
+                      {authMode === "signin" ? "Create an account" : "I already have an account"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="px-6 py-4 border-t border-gray-800 text-center text-[11px] text-gray-500">
+                By continuing, you agree to our Terms and acknowledge our Privacy Policy.
+              </div>
             </div>
-
-            {authError && <div className="text-red-400 text-sm mb-2">{authError}</div>}
-
-            {authMode === "signin" ? (
-              <button
-                onClick={() => handleEmailPassword("signin")}
-                className="w-full px-4 py-2 rounded-md bg-blue-500 hover:bg-blue-600"
-              >
-                Sign In
-              </button>
-            ) : (
+          </div>
+        </div>
+        ) : (
               <button
                 onClick={() => handleEmailPassword("signup")}
                 className="w-full px-4 py-2 rounded-md bg-green-500 hover:bg-green-600"
