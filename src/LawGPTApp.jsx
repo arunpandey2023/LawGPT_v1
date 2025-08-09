@@ -10,6 +10,10 @@ const LawGPTApp = () => {
   const [showTools, setShowTools] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const fileInputRef = useRef(null);
+  const shareRef = useRef(null);
+  const toolsRef = useRef(null);
+  const topbarRef = useRef(null);
+
 
   const [recording, setRecording] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState("en-IN");
@@ -174,9 +178,71 @@ const LawGPTApp = () => {
     a.remove();
     URL.revokeObjectURL(url);
   };
+  const getLastShareText = () => {
+    const last = [...messages].reverse().find(m => m && typeof m.text === "string" && m.text.trim().length > 0);
+    return last ? last.text : "";
+  };
+
+  const closeMenus = () => {
+    setShowShare(false);
+    setShowTools(false);
+  };
+
+  const handleShareSlack = () => {
+    const text = encodeURIComponent(getLastShareText() || "Shared from LawGPT");
+    // Attempt to open Slack app; fallback to web
+    const appUrl = "slack://open";
+    const webUrl = "https://slack.com/app_redirect?";
+    // Try app first
+    let opened = false;
+    try {
+      const w = window.open(appUrl, "_blank");
+      opened = !!w;
+    } catch (e) {}
+    if (!opened) window.open(webUrl, "_blank");
+    closeMenus();
+  };
+
+  const handleShareWhatsApp = () => {
+    const text = encodeURIComponent(getLastShareText() || "Shared from LawGPT");
+    const url = `https://wa.me/?text=${text}`;
+    window.open(url, "_blank");
+    closeMenus();
+  };
+
+  const handleShareEmailGmail = () => {
+    const subject = encodeURIComponent("LawGPT Share");
+    const body = encodeURIComponent(getLastShareText() || "");
+    const url = `https://mail.google.com/mail/?view=cm&fs=1&tf=1&su=${subject}&body=${body}`;
+    window.open(url, "_blank");
+    closeMenus();
+  };
+
+  const handleShareDrive = () => {
+    // We cannot upload programmatically without OAuth; open Drive so user can create/upload a file
+    const url = "https://drive.google.com/drive/my-drive";
+    window.open(url, "_blank");
+    closeMenus();
+  };
 
 
-  return (
+
+  
+  React.useEffect(() => {
+    const onDocClick = (e) => {
+      const target = e.target;
+      const inShare = shareRef.current && shareRef.current.contains(target);
+      const inTools = toolsRef.current && toolsRef.current.contains(target);
+      const inTopbar = topbarRef.current && topbarRef.current.contains(target);
+      if (!inShare && !inTools && !inTopbar) {
+        setShowShare(false);
+        setShowTools(false);
+      }
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, []);
+return (
     <div className="flex h-screen bg-gray-900 text-white relative">
       {/* Sidebar */}
       <div className="w-64 bg-gray-800 p-4 flex flex-col justify-between">
@@ -201,7 +267,7 @@ const LawGPTApp = () => {
       {/* Chat Panel */}
       <div className="flex-1 flex flex-col relative">
         {/* Top Bar */}
-        <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800 bg-gray-900 sticky top-0 z-10">
+        <div ref={topbarRef} className="flex items-center justify-between px-4 py-2 border-b border-gray-800 bg-gray-900 sticky top-0 z-10">
           <div className="text-sm text-gray-400">LawGPT Assistant</div>
           <div className="flex items-center gap-2">
             <button
@@ -230,7 +296,7 @@ const LawGPTApp = () => {
 
         {/* Tool Popup */}
         {showTools && (
-          <div className="absolute bottom-20 left-20 bg-gray-800 border border-gray-700 p-3 rounded z-10">
+          <div ref={toolsRef} className="absolute bottom-20 left-20 bg-gray-800 border border-gray-700 p-3 rounded z-10">
             <ul className="space-y-2 text-sm">
               <li className="cursor-pointer" onClick={handlePrintLast}>🖨️ Print last chat</li>
               <li className="cursor-pointer" onClick={handleSaveSession}>💾 Save session as .txt</li>
@@ -240,12 +306,12 @@ const LawGPTApp = () => {
 
         {/* Share Popup */}
         {showShare && (
-          <div className="absolute top-12 right-4 bg-gray-800 border border-gray-700 p-3 rounded z-20 shadow-lg">
+          <div ref={shareRef} className="absolute top-12 right-4 bg-gray-800 border border-gray-700 p-3 rounded z-20 shadow-lg">
             <ul className="space-y-2 text-sm">
-              <li className="cursor-pointer">💬 Slack</li>
-              <li className="cursor-pointer">📱 WhatsApp</li>
-              <li className="cursor-pointer">✉️ Email</li>
-              <li className="cursor-pointer">📤 Drive</li>
+              <li className="cursor-pointer" onClick={handleShareSlack}>💬 Slack</li>
+              <li className="cursor-pointer" onClick={handleShareWhatsApp}>📱 WhatsApp</li>
+              <li className="cursor-pointer" onClick={handleShareEmailGmail}>✉️ Gmail</li>
+              <li className="cursor-pointer" onClick={handleShareDrive}>📤 Drive</li>
             </ul>
           </div>
         )}
