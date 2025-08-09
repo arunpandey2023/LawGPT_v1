@@ -1,7 +1,7 @@
 import React, { useState, useRef } from "react";
 import axios from "axios";
 import { auth, googleProvider } from "./firebase";
-import { signInWithPopup, signOut as fbSignOut, onAuthStateChanged } from "firebase/auth";
+import { signInWithPopup, signOut as fbSignOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 
 const LawGPTApp = () => {
   const [messages, setMessages] = useState([
@@ -15,8 +15,7 @@ const LawGPTApp = () => {
   const shareRef = useRef(null);
   const toolsRef = useRef(null);
   const topbarRef = useRef(null);
-  const authRef = useRef(null);
-  const [showAuth, setShowAuth] = useState(false);
+
   const [loggedIn, setLoggedIn] = useState(false);
   const [userName, setUserName] = useState("");
 
@@ -230,47 +229,93 @@ const LawGPTApp = () => {
     window.open(url, "_blank");
     closeMenus();
   };
-  const startLoginGoogle = async () => {
+  const startLogin = (provider) => {
+    // Placeholder: open provider login page (without actual OAuth callback)
+    const map = {
+      google: "https://accounts.google.com/signin",
+      github: "https://github.com/login",
+      microsoft: "https://login.microsoftonline.com/",
+      linkedin: "https://www.linkedin.com/login"
+    };
+    const url = map[provider];
+    if (url) window.open(url, "_blank");
+    // Simulate success
+    setLoggedIn(true);
+    setUserName(provider.charAt(0).toUpperCase() + provider.slice(1));
+   
+  };
+
+  const doLogout = () => {
+    setLoggedIn(false);
+    setUserName("");
+   
+  };
+
+
+
+
+  
+  
+  // === Auth UI State & Handlers ===
+  const [authMode, setAuthMode] = useState("signin"); // "signin" | "signup"
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authError, setAuthError] = useState("");
+
+  const handleGoogleAuth = async () => {
+    setAuthError("");
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const user = result.user;
-      setLoggedIn(true);
-      setUserName(user.displayName || user.email || "Google User");
-      setShowAuth(false);
+      await signInWithPopup(auth, googleProvider);
+      // onAuthStateChanged will update loggedIn
     } catch (e) {
-      console.error("Google sign-in failed", e);
-      alert("Google sign-in failed. Please try again.");
+      console.error(e);
+      setAuthError(e?.message || "Google sign-in failed");
     }
   };
 
-  const doLogout = async () => {
-    try { await fbSignOut(auth); } catch (e) { console.warn("Sign out error", e); }
-    setLoggedIn(false);
-    setUserName("");
-    setShowAuth(false);
+  const handleEmailPassword = async (mode) => {
+    setAuthError("");
+    try {
+      if (mode === "signin") {
+        await signInWithEmailAndPassword(auth, authEmail, authPassword);
+      } else {
+        await createUserWithEmailAndPassword(auth, authEmail, authPassword);
+      }
+      // onAuthStateChanged will update loggedIn
+    } catch (e) {
+      console.error(e);
+      setAuthError(e?.message || "Authentication failed");
+    }
   };
 
-
-
-
-
-  React.useEffect(() => {
+  const handleResetPassword = async () => {
+    setAuthError("");
+    try {
+      if (!authEmail) {
+        setAuthError("Enter your email to receive reset link.");
+        return;
+      }
+      await sendPasswordResetEmail(auth, authEmail);
+      alert("Password reset email sent.");
+    } catch (e) {
+      console.error(e);
+      setAuthError(e?.message || "Could not send reset email");
+    }
+  };
+React.useEffect(() => {
     const onDocClick = (e) => {
       const target = e.target;
       const inShare = shareRef.current && shareRef.current.contains(target);
       const inTools = toolsRef.current && toolsRef.current.contains(target);
       const inTopbar = topbarRef.current && topbarRef.current.contains(target);
-      const inAuth = authRef.current && authRef.current.contains(target);
-      if (!inShare && !inTools && !inTopbar && !inAuth) {
+      
+      if (!inShare && !inTools && !inTopbar) {
         setShowShare(false);
         setShowTools(false);
-        setShowAuth(false);
       }
     };
     document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, []);
-
+    
   React.useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
       if (u) {
@@ -281,7 +326,83 @@ const LawGPTApp = () => {
         setUserName("");
       }
     });
-    return () => unsub();
+    
+  if (!loggedIn) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white p-4">
+        <div className="w-full max-w-md bg-gray-800 border border-gray-700 rounded-2xl p-6 shadow-xl">
+          <h1 className="text-2xl font-semibold mb-1 text-center">Welcome to LawGPT</h1>
+          <p className="text-sm text-gray-400 mb-6 text-center">Sign in to continue</p>
+
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => setAuthMode("signin")}
+              className={"flex-1 px-3 py-2 rounded-md border " + (authMode === "signin" ? "bg-white text-black border-white" : "bg-gray-900 border-gray-700")}
+            >
+              Sign In
+            </button>
+            <button
+              onClick={() => setAuthMode("signup")}
+              className={"flex-1 px-3 py-2 rounded-md border " + (authMode === "signup" ? "bg-white text-black border-white" : "bg-gray-900 border-gray-700")}
+            >
+              Sign Up
+            </button>
+          </div>
+
+          <button
+            onClick={handleGoogleAuth}
+            className="w-full mb-4 px-4 py-2 rounded-md bg-white text-black hover:bg-gray-300 flex items-center justify-center gap-2"
+          >
+            <span>🔵</span> Continue with Google
+          </button>
+
+          <div className="grid gap-2 mb-2">
+            <input
+              type="email"
+              placeholder="Email"
+              className="w-full p-2 rounded-md bg-gray-900 border border-gray-700"
+              value={authEmail}
+              onChange={(e) => setAuthEmail(e.target.value)}
+            />
+            <input
+              type="password"
+              placeholder="Password"
+              className="w-full p-2 rounded-md bg-gray-900 border border-gray-700"
+              value={authPassword}
+              onChange={(e) => setAuthPassword(e.target.value)}
+            />
+          </div>
+
+          {authError && <div className="text-red-400 text-sm mb-2">{authError}</div>}
+
+          {authMode === "signin" ? (
+            <button
+              onClick={() => handleEmailPassword("signin")}
+              className="w-full px-4 py-2 rounded-md bg-blue-500 hover:bg-blue-600"
+            >
+              Sign In
+            </button>
+          ) : (
+            <button
+              onClick={() => handleEmailPassword("signup")}
+              className="w-full px-4 py-2 rounded-md bg-green-500 hover:bg-green-600"
+            >
+              Create Account
+            </button>
+          )}
+
+          <div className="flex items-center justify-between mt-3 text-sm text-gray-400">
+            <button onClick={handleResetPassword} className="underline">Forgot password?</button>
+            <a href="https://firebase.google.com/docs/auth" target="_blank" className="underline">Help</a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+return () => unsub();
+  }, []);
+return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
 return (
     <div className="flex h-screen bg-gray-900 text-white relative">
@@ -299,7 +420,7 @@ return (
         <div className="mt-4">
           <hr className="my-2 border-gray-600" />
           <p className="text-sm text-gray-400">arunpandey2023 (Free Plan)</p>
-          
+          <div className="mt-2 text-sm text-gray-500">Use the top-right Login menu.</div>
         </div>
       </div>
 
@@ -312,14 +433,14 @@ return (
             <button
               className="text-sm px-2 py-1 bg-gray-800 border border-gray-700 rounded hover:bg-gray-700"
               title="Share"
-              onClick={() => { setShowShare(!showShare); setShowAuth(false); }}
+              onClick={() => { setShowShare(!showShare); }}
             >
               🔗 Share
             </button>
             <button
               className="text-sm px-2 py-1 bg-gray-800 border border-gray-700 rounded hover:bg-gray-700"
               title="Login/Logout"
-              onClick={() => { setShowAuth(!showAuth); setShowShare(false); }}
+              onClick={() => { setShowShare(false); }}
             >
               {loggedIn ? `👤 ${userName}` : "🔐 Login/Logout"}
             </button>
@@ -361,23 +482,6 @@ return (
             </ul>
           </div>
         )}
-
-        {/* Auth Popup */}
-        {showAuth && (
-          <div ref={authRef} className="absolute top-12 right-4 bg-gray-800 border border-gray-700 p-3 rounded z-30 shadow-lg mt-2">
-            <ul className="space-y-2 text-sm">
-              {!loggedIn && (
-                <>
-                  <li className="cursor-pointer" onClick={startLoginGoogle}>🔵 Login with Google</li>
-                </>
-              )}
-              {loggedIn && (
-                <li className="cursor-pointer text-red-300" onClick={doLogout}>🚪 Logout</li>
-              )}
-            </ul>
-          </div>
-        )}
-
         {/* Input Area */}
         <div className="p-4 border-t border-gray-700 flex items-center gap-2">
           <button onClick={() => fileInputRef.current.click()} className="text-lg">➕</button>
