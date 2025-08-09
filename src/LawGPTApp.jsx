@@ -1,5 +1,7 @@
 import React, { useState, useRef } from "react";
 import axios from "axios";
+import { auth, googleProvider } from "./firebase";
+import { signInWithPopup, signOut as fbSignOut, onAuthStateChanged } from "firebase/auth";
 
 const LawGPTApp = () => {
   const [messages, setMessages] = useState([
@@ -13,11 +15,6 @@ const LawGPTApp = () => {
   const shareRef = useRef(null);
   const toolsRef = useRef(null);
   const topbarRef = useRef(null);
-
-  const authRef = useRef(null);
-  const [showAuth, setShowAuth] = useState(false);
-  const [loggedIn, setLoggedIn] = useState(false);
-  const [userName, setUserName] = useState("");
 
 
   const [recording, setRecording] = useState(false);
@@ -229,28 +226,6 @@ const LawGPTApp = () => {
     window.open(url, "_blank");
     closeMenus();
   };
-  const startLogin = (provider) => {
-    // Placeholder: open provider login page (without actual OAuth callback)
-    const map = {
-      google: "https://accounts.google.com/signin",
-      github: "https://github.com/login",
-      microsoft: "https://login.microsoftonline.com/",
-      linkedin: "https://www.linkedin.com/login"
-    };
-    const url = map[provider];
-    if (url) window.open(url, "_blank");
-    // Simulate success
-    setLoggedIn(true);
-    setUserName(provider.charAt(0).toUpperCase() + provider.slice(1));
-    setShowAuth(false);
-  };
-
-  const doLogout = () => {
-    setLoggedIn(false);
-    setUserName("");
-    setShowAuth(false);
-  };
-
 
 
 
@@ -261,14 +236,26 @@ const LawGPTApp = () => {
       const inShare = shareRef.current && shareRef.current.contains(target);
       const inTools = toolsRef.current && toolsRef.current.contains(target);
       const inTopbar = topbarRef.current && topbarRef.current.contains(target);
-      const inAuth = authRef.current && authRef.current.contains(target);
-      if (!inShare && !inTools && !inTopbar && !inAuth) {
+      if (!inShare && !inTools && !inTopbar) {
         setShowShare(false);
         setShowTools(false);
       }
     };
     document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
+    
+  React.useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => {
+      if (u) {
+        setLoggedIn(true);
+        setUserName(u.displayName || u.email || "Google User");
+      } else {
+        setLoggedIn(false);
+        setUserName("");
+      }
+    });
+    return () => unsub();
+  }, []);
+return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
 return (
     <div className="flex h-screen bg-gray-900 text-white relative">
@@ -286,7 +273,9 @@ return (
         <div className="mt-4">
           <hr className="my-2 border-gray-600" />
           <p className="text-sm text-gray-400">arunpandey2023 (Free Plan)</p>
-          <div className="mt-2 text-sm text-gray-500">Use the top-right Login menu.</div>
+          <div className="mt-2 text-sm">
+            <button className="text-blue-400 underline">Login with Google</button>
+          </div>
         </div>
       </div>
 
@@ -299,16 +288,9 @@ return (
             <button
               className="text-sm px-2 py-1 bg-gray-800 border border-gray-700 rounded hover:bg-gray-700"
               title="Share"
-              onClick={() => { setShowShare(!showShare); setShowAuth(false); }}
+              onClick={() => setShowShare(!showShare)}
             >
               🔗 Share
-            </button>
-            <button
-              className="text-sm px-2 py-1 bg-gray-800 border border-gray-700 rounded hover:bg-gray-700"
-              title="Login/Logout"
-              onClick={() => { setShowAuth(!showAuth); setShowShare(false); }}
-            >
-              {loggedIn ? `👤 ${userName}` : "🔐 Login/Logout"}
             </button>
           </div>
         </div>
@@ -345,24 +327,6 @@ return (
               <li className="cursor-pointer" onClick={handleShareWhatsApp}>📱 WhatsApp</li>
               <li className="cursor-pointer" onClick={handleShareEmailGmail}>✉️ Gmail</li>
               <li className="cursor-pointer" onClick={handleShareDrive}>📤 Drive</li>
-            </ul>
-          </div>
-        )}
-        {/* Auth Popup */}
-        {showAuth && (
-          <div ref={authRef} className="absolute top-12 right-4 bg-gray-800 border border-gray-700 p-3 rounded z-30 shadow-lg mt-2">
-            <ul className="space-y-2 text-sm">
-              {!loggedIn && (
-                <>
-                  <li className="cursor-pointer" onClick={() => startLogin('google')}>🔵 Login with Google</li>
-                  <li className="cursor-pointer" onClick={() => startLogin('github')}>⚫ Login with GitHub</li>
-                  <li className="cursor-pointer" onClick={() => startLogin('microsoft')}>🟣 Login with Microsoft</li>
-                  <li className="cursor-pointer" onClick={() => startLogin('linkedin')}>🔹 Login with LinkedIn</li>
-                </>
-              )}
-              {loggedIn && (
-                <li className="cursor-pointer text-red-300" onClick={doLogout}>🚪 Logout</li>
-              )}
             </ul>
           </div>
         )}
