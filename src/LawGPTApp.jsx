@@ -11,6 +11,25 @@ const LawGPTApp = () => {
   const [showShare, setShowShare] = useState(false);
   const fileInputRef = useRef(null);
 
+  const [recording, setRecording] = useState(false);
+  const [selectedLanguage, setSelectedLanguage] = useState("en-IN");
+  const recognitionRef = useRef(null);
+
+  const languageOptions = [
+    { code: "en-IN", label: "English" },
+    { code: "hi-IN", label: "Hindi" },
+    { code: "bn-IN", label: "Bengali" },
+    { code: "mr-IN", label: "Marathi" },
+    { code: "te-IN", label: "Telugu" },
+    { code: "ta-IN", label: "Tamil" },
+    { code: "gu-IN", label: "Gujarati" },
+    { code: "pa-IN", label: "Punjabi" },
+    { code: "ml-IN", label: "Malayalam" },
+    { code: "or-IN", label: "Odia" },
+    { code: "kn-IN", label: "Kannada" }
+  ];
+
+
   const handleSend = async () => {
     if (!input.trim()) return;
 
@@ -52,8 +71,62 @@ const LawGPTApp = () => {
     }
   };
 
-  const handleVoiceClick = () => {
-    alert("Voice input feature coming soon!");
+  const handleVoiceClick = async () => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      alert("Voice input is not supported in this browser. Try Chrome/Edge or switch to server STT.");
+      return;
+    }
+
+    if (!recognitionRef.current) {
+      const rec = new SR();
+      rec.lang = selectedLanguage || "en-IN";
+      rec.interimResults = true;
+      rec.continuous = false;
+
+      let finalTranscript = "";
+
+      rec.onresult = (e) => {
+        let interim = "";
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const t = e.results[i][0].transcript;
+          if (e.results[i].isFinal) finalTranscript += t;
+          else interim += t;
+        }
+        // show interim/final text in input box
+        const text = (finalTranscript + " " + interim).trim();
+        if (text) setInput(text);
+      };
+
+      rec.onerror = (e) => {
+        console.warn("Speech error:", e.error);
+        setRecording(false);
+      };
+
+      rec.onend = () => {
+        setRecording(false);
+        // Optional auto-send when finished speaking:
+        // if ((finalTranscript || "").trim()) handleSend();
+      };
+
+      recognitionRef.current = rec;
+    }
+
+    // Always refresh language before starting
+    recognitionRef.current.lang = selectedLanguage || "en-IN";
+
+    if (!recording) {
+      try {
+        setRecording(true);
+        recognitionRef.current.start();
+      } catch (err) {
+        console.error(err);
+        setRecording(false);
+      }
+    } else {
+      recognitionRef.current.stop();
+      setRecording(false);
+    }
   };
 
   const newChat = () => setMessages([{ type: "bot", text: "New chat started. How can I assist you?" }]);
@@ -134,7 +207,19 @@ const LawGPTApp = () => {
             className="hidden"
           />
           <button className="text-lg" title="Tools" onClick={() => setShowTools(!showTools)}>🛠️</button>
-          <button className="text-lg" title="Voice" onClick={handleVoiceClick}>🎙️</button>
+          <select
+            className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm"
+            value={selectedLanguage}
+            onChange={(e) => setSelectedLanguage(e.target.value)}
+            title="Recognition language"
+          >
+            {languageOptions.map(opt => (
+              <option key={opt.code} value={opt.code}>{opt.label}</option>
+            ))}
+          </select>
+          <button className="text-lg" title="Voice" onClick={handleVoiceClick}>
+            {recording ? "⏺️" : "🎙️"}
+          </button>
           <button className="text-lg" title="Share" onClick={() => setShowShare(!showShare)}>🔗</button>
 
           <input
