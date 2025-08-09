@@ -1,10 +1,12 @@
 import React, { useState, useRef } from "react";
 import axios from "axios";
 import { auth, googleProvider } from "./firebase";
-import { signInWithPopup, signOut as fbSignOut, onAuthStateChanged } from "firebase/auth";
+import { signInWithPopup, onAuthStateChanged } from "firebase/auth";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 
 const LawGPTApp = () => {
+
+  // ---- App State ----
   const [messages, setMessages] = useState([
     { type: "bot", text: "Welcome to LawGPT! How can I assist you today?" }
   ]);
@@ -12,16 +14,17 @@ const LawGPTApp = () => {
   const [loading, setLoading] = useState(false);
   const [showTools, setShowTools] = useState(false);
   const [showShare, setShowShare] = useState(false);
+
   const fileInputRef = useRef(null);
   const shareRef = useRef(null);
   const toolsRef = useRef(null);
   const topbarRef = useRef(null);
-  const authRef = useRef(null);
-  const [showAuth, setShowAuth] = useState(false);
+
+  // Auth session
   const [loggedIn, setLoggedIn] = useState(false);
   const [userName, setUserName] = useState("");
 
-
+  // Voice input
   const [recording, setRecording] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState("en-IN");
   const recognitionRef = useRef(null);
@@ -40,27 +43,21 @@ const LawGPTApp = () => {
     { code: "kn-IN", label: "Kannada" }
   ];
 
-
+  // ---- Chat handlers ----
   const handleSend = async () => {
     if (!input.trim()) return;
-
     const userMessage = { type: "user", text: input };
     setMessages(prev => [...prev, userMessage]);
     setInput("");
     setLoading(true);
 
     try {
-      const response = await axios.post("https://mailabs.app.n8n.cloud/webhook/query", {
-        message: input
-      });
+      const response = await axios.post("https://mailabs.app.n8n.cloud/webhook/query", { message: input });
       const botMessage = response.data?.output || "Sorry, I couldn't understand that.";
       setMessages(prev => [...prev, { type: "bot", text: botMessage }]);
     } catch (error) {
       console.error("Error fetching response:", error);
-      setMessages(prev => [
-        ...prev,
-        { type: "bot", text: "There was an error processing your request." }
-      ]);
+      setMessages(prev => [...prev, { type: "bot", text: "There was an error processing your request." }]);
     }
     setLoading(false);
   };
@@ -68,14 +65,10 @@ const LawGPTApp = () => {
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
     const formData = new FormData();
     formData.append("file", file);
-
     try {
-      await axios.post("https://mailabs.app.n8n.cloud/webhook/summary", formData, {
-        headers: { "Content-Type": "multipart/form-data" }
-      });
+      await axios.post("https://mailabs.app.n8n.cloud/webhook/summary", formData, { headers: { "Content-Type": "multipart/form-data" } });
       alert("File uploaded successfully!");
     } catch (err) {
       console.error("Upload failed", err);
@@ -88,13 +81,11 @@ const LawGPTApp = () => {
       alert("Voice input is not supported in this browser. Try Chrome/Edge or switch to server STT.");
       return;
     }
-
     if (!recognitionRef.current) {
       const rec = new SR();
       rec.lang = selectedLanguage || "en-IN";
       rec.interimResults = true;
       rec.continuous = false;
-
       let finalTranscript = "";
 
       rec.onresult = (e) => {
@@ -104,36 +95,17 @@ const LawGPTApp = () => {
           if (e.results[i].isFinal) finalTranscript += t;
           else interim += t;
         }
-        // show interim/final text in input box
         const text = (finalTranscript + " " + interim).trim();
         if (text) setInput(text);
       };
-
-      rec.onerror = (e) => {
-        console.warn("Speech error:", e.error);
-        setRecording(false);
-      };
-
-      rec.onend = () => {
-        setRecording(false);
-        // Optional auto-send when finished speaking:
-        // if ((finalTranscript || "").trim()) handleSend();
-      };
-
+      rec.onerror = () => setRecording(false);
+      rec.onend = () => setRecording(false);
       recognitionRef.current = rec;
     }
-
-    // Always refresh language before starting
     recognitionRef.current.lang = selectedLanguage || "en-IN";
-
     if (!recording) {
-      try {
-        setRecording(true);
-        recognitionRef.current.start();
-      } catch (err) {
-        console.error(err);
-        setRecording(false);
-      }
+      try { setRecording(true); recognitionRef.current.start(); }
+      catch { setRecording(false); }
     } else {
       recognitionRef.current.stop();
       setRecording(false);
@@ -144,15 +116,11 @@ const LawGPTApp = () => {
   const searchChat = () => alert("Search chat functionality is under development.");
   const openLibrary = () => window.open("https://njdg.ecourts.gov.in/njdg_v3/", "_blank");
   const openRepository = () => alert("Case repository opening soon.");
-  const escapeHtml = (str = "") =>
-    str.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const escapeHtml = (str = "") => str.replace(/[&<>\"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
   const handlePrintLast = () => {
     const last = [...messages].reverse().find(m => m && typeof m.text === "string" && m.text.trim().length > 0);
-    if (!last) {
-      alert("No messages to print yet.");
-      return;
-    }
+    if (!last) return alert("No messages to print yet.");
     const w = window.open("", "_blank", "width=800,height=600");
     if (!w) return;
     const html = `<!doctype html><html><head><title>Print Chat</title>
@@ -163,100 +131,39 @@ const LawGPTApp = () => {
       <pre>${escapeHtml(last.text)}</pre>
       <script>window.onload = () => { window.print(); setTimeout(() => window.close(), 400); }<\/script>
       </body></html>`;
-    w.document.open();
-    w.document.write(html);
-    w.document.close();
+    w.document.open(); w.document.write(html); w.document.close();
   };
 
   const handleSaveSession = () => {
-    if (!messages || !messages.length) {
-      alert("No messages to save yet.");
-      return;
-    }
-    const text = messages.map((m, i) => `${m.type === "user" ? "You" : "LawGPT"}: ${m.text}`).join("\n\n---\n\n");
+    if (!messages?.length) return alert("No messages to save yet.");
+    const text = messages.map((m) => `${m.type === "user" ? "You" : "LawGPT"}: ${m.text}`).join("\\n\\n---\\n\\n");
     const blob = new Blob([text], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     const stamp = new Date().toISOString().slice(0,19).replace(/[T:]/g,"-");
-    a.href = url;
-    a.download = `lawgpt_session_${stamp}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    a.href = url; a.download = `lawgpt_session_${stamp}.txt`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
   };
+
   const getLastShareText = () => {
     const last = [...messages].reverse().find(m => m && typeof m.text === "string" && m.text.trim().length > 0);
     return last ? last.text : "";
   };
 
-  const closeMenus = () => {
-    setShowShare(false);
-    setShowTools(false);
-  };
+  const closeMenus = () => { setShowShare(false); setShowTools(false); };
 
   const handleShareSlack = () => {
-    const text = encodeURIComponent(getLastShareText() || "Shared from LawGPT");
-    // Attempt to open Slack app; fallback to web
     const appUrl = "slack://open";
     const webUrl = "https://slack.com/app_redirect?";
-    // Try app first
     let opened = false;
-    try {
-      const w = window.open(appUrl, "_blank");
-      opened = !!w;
-    } catch (e) {}
+    try { const w = window.open(appUrl, "_blank"); opened = !!w; } catch {}
     if (!opened) window.open(webUrl, "_blank");
     closeMenus();
   };
+  const handleShareWhatsApp = () => { const text = encodeURIComponent(getLastShareText() || "Shared from LawGPT"); window.open(`https://wa.me/?text=${text}`, "_blank"); closeMenus(); };
+  const handleShareEmailGmail = () => { const subject = encodeURIComponent("LawGPT Share"); const body = encodeURIComponent(getLastShareText() || ""); window.open(`https://mail.google.com/mail/?view=cm&fs=1&tf=1&su=${subject}&body=${body}`, "_blank"); closeMenus(); };
+  const handleShareDrive = () => { window.open("https://drive.google.com/drive/my-drive", "_blank"); closeMenus(); };
 
-  const handleShareWhatsApp = () => {
-    const text = encodeURIComponent(getLastShareText() || "Shared from LawGPT");
-    const url = `https://wa.me/?text=${text}`;
-    window.open(url, "_blank");
-    closeMenus();
-  };
-
-  const handleShareEmailGmail = () => {
-    const subject = encodeURIComponent("LawGPT Share");
-    const body = encodeURIComponent(getLastShareText() || "");
-    const url = `https://mail.google.com/mail/?view=cm&fs=1&tf=1&su=${subject}&body=${body}`;
-    window.open(url, "_blank");
-    closeMenus();
-  };
-
-  const handleShareDrive = () => {
-    // We cannot upload programmatically without OAuth; open Drive so user can create/upload a file
-    const url = "https://drive.google.com/drive/my-drive";
-    window.open(url, "_blank");
-    closeMenus();
-  };
-  const startLoginGoogle = async () => {
-    try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const user = result.user;
-      setLoggedIn(true);
-      setUserName(user.displayName || user.email || "Google User");
-      setShowAuth(false);
-    } catch (e) {
-      console.error("Google sign-in failed", e);
-      alert("Google sign-in failed. Please try again.");
-    }
-  };
-
-  const doLogout = async () => {
-    try { await fbSignOut(auth); } catch (e) { console.warn("Sign out error", e); }
-    setLoggedIn(false);
-    setUserName("");
-    setShowAuth(false);
-  };
-
-
-
-
-
-  
-  // === Auth UI State & Handlers ===
+  // ---- Auth handlers (for the Auth page only) ----
   const [authMode, setAuthMode] = useState("signin"); // "signin" | "signup"
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
@@ -264,284 +171,225 @@ const LawGPTApp = () => {
 
   const handleGoogleAuth = async () => {
     setAuthError("");
-    try {
-      await signInWithPopup(auth, googleProvider);
-      // onAuthStateChanged will update loggedIn
-    } catch (e) {
-      console.error(e);
-      setAuthError(e?.message || "Google sign-in failed");
-    }
+    try { await signInWithPopup(auth, googleProvider); }
+    catch (e) { console.error(e); setAuthError(e?.message || "Google sign-in failed"); }
   };
-
   const handleEmailPassword = async (mode) => {
     setAuthError("");
     try {
-      if (mode === "signin") {
-        await signInWithEmailAndPassword(auth, authEmail, authPassword);
-      } else {
-        await createUserWithEmailAndPassword(auth, authEmail, authPassword);
-      }
-      // onAuthStateChanged will update loggedIn
-    } catch (e) {
-      console.error(e);
-      setAuthError(e?.message || "Authentication failed");
-    }
+      if (mode === "signin") await signInWithEmailAndPassword(auth, authEmail, authPassword);
+      else await createUserWithEmailAndPassword(auth, authEmail, authPassword);
+    } catch (e) { console.error(e); setAuthError(e?.message || "Authentication failed"); }
   };
-
   const handleResetPassword = async () => {
     setAuthError("");
     try {
-      if (!authEmail) {
-        setAuthError("Enter your email to receive reset link.");
-        return;
-      }
+      if (!authEmail) return setAuthError("Enter your email to receive reset link.");
       await sendPasswordResetEmail(auth, authEmail);
       alert("Password reset email sent.");
-    } catch (e) {
-      console.error(e);
-      setAuthError(e?.message || "Could not send reset email");
-    }
+    } catch (e) { console.error(e); setAuthError(e?.message || "Could not send reset email"); }
   };
-React.useEffect(() => {
+
+  // ---- Effects ----
+  React.useEffect(() => {
     const onDocClick = (e) => {
       const target = e.target;
       const inShare = shareRef.current && shareRef.current.contains(target);
       const inTools = toolsRef.current && toolsRef.current.contains(target);
       const inTopbar = topbarRef.current && topbarRef.current.contains(target);
-      const inAuth = authRef.current && authRef.current.contains(target);
-      if (!inShare && !inTools && !inTopbar && !inAuth) {
-        setShowShare(false);
-        setShowTools(false);
-        setShowAuth(false);
-      }
+      if (!inShare && !inTools && !inTopbar) { setShowShare(false); setShowTools(false); }
     };
     document.addEventListener("mousedown", onDocClick);
-    return (
-  <>
-    {!loggedIn ? (
-
-      {/* ===== Auth Page (shown when not logged in) ===== */}
-      <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white p-4">
-        <div className="w-full max-w-md bg-gray-800 border border-gray-700 rounded-2xl p-6 shadow-xl">
-          <h1 className="text-2xl font-semibold mb-1 text-center">Welcome to LawGPT</h1>
-          <p className="text-sm text-gray-400 mb-6 text-center">Sign in to continue</p>
-
-          <div className="flex gap-2 mb-4">
-            <button
-              onClick={() => setAuthMode("signin")}
-              className={"flex-1 px-3 py-2 rounded-md border " + (authMode === "signin" ? "bg-white text-black border-white" : "bg-gray-900 border-gray-700")}
-            >
-              Sign In
-            </button>
-            <button
-              onClick={() => setAuthMode("signup")}
-              className={"flex-1 px-3 py-2 rounded-md border " + (authMode === "signup" ? "bg-white text-black border-white" : "bg-gray-900 border-gray-700")}
-            >
-              Sign Up
-            </button>
-          </div>
-
-          <button
-            onClick={handleGoogleAuth}
-            className="w-full mb-4 px-4 py-2 rounded-md bg-white text-black hover:bg-gray-300 flex items-center justify-center gap-2"
-          >
-            <span>🔵</span> Continue with Google
-          </button>
-
-          <div className="grid gap-2 mb-2">
-            <input
-              type="email"
-              placeholder="Email"
-              className="w-full p-2 rounded-md bg-gray-900 border border-gray-700"
-              value={authEmail}
-              onChange={(e) => setAuthEmail(e.target.value)}
-            />
-            <input
-              type="password"
-              placeholder="Password"
-              className="w-full p-2 rounded-md bg-gray-900 border border-gray-700"
-              value={authPassword}
-              onChange={(e) => setAuthPassword(e.target.value)}
-            />
-          </div>
-
-          {authError && <div className="text-red-400 text-sm mb-2">{authError}</div>}
-
-          {authMode === "signin" ? (
-            <button
-              onClick={() => handleEmailPassword("signin")}
-              className="w-full px-4 py-2 rounded-md bg-blue-500 hover:bg-blue-600"
-            >
-              Sign In
-            </button>
-          ) : (
-            <button
-              onClick={() => handleEmailPassword("signup")}
-              className="w-full px-4 py-2 rounded-md bg-green-500 hover:bg-green-600"
-            >
-              Create Account
-            </button>
-          )}
-
-          <div className="flex items-center justify-between mt-3 text-sm text-gray-400">
-            <button onClick={handleResetPassword} className="underline">Forgot password?</button>
-            <a href="https://firebase.google.com/docs/auth" target="_blank" className="underline">Help</a>
-          </div>
-        </div>
-      </div>
-
-    ) : (
-) => document.removeEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
 
   React.useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
-      if (u) {
-        setLoggedIn(true);
-        setUserName(u.displayName || u.email || "Google User");
-      } else {
-        setLoggedIn(false);
-        setUserName("");
-      }
+      if (u) { setLoggedIn(true); setUserName(u.displayName || u.email || "Google User"); }
+      else { setLoggedIn(false); setUserName(""); }
     });
     return () => unsub();
   }, []);
-return (
-    <div className="flex h-screen bg-gray-900 text-white relative">
-      {/* Sidebar */}
-      <div className="w-64 bg-gray-800 p-4 flex flex-col justify-between">
-        <div>
-          <h2 className="text-xl font-bold mb-4">LawGPT</h2>
-          <ul className="space-y-2">
-            <li className="cursor-pointer" onClick={newChat}>+ New Chat</li>
-            <li className="cursor-pointer" onClick={searchChat}>🔍 Search Chat</li>
-            <li className="cursor-pointer" onClick={openLibrary}>📚 Library</li>
-            <li className="cursor-pointer" onClick={openRepository}>📁 Case Repository</li>
-          </ul>
-        </div>
-        <div className="mt-4">
-          <hr className="my-2 border-gray-600" />
-          <p className="text-sm text-gray-400">arunpandey2023 (Free Plan)</p>
-          
-        </div>
-      </div>
 
-      {/* Chat Panel */}
-      <div className="flex-1 flex flex-col relative">
-        {/* Top Bar */}
-        <div ref={topbarRef} className="flex items-center justify-between px-4 py-2 border-b border-gray-800 bg-gray-900 sticky top-0 z-10">
-          <div className="text-sm text-gray-400">LawGPT Assistant</div>
-          <div className="flex items-center gap-2">
-            <button
-              className="text-sm px-2 py-1 bg-gray-800 border border-gray-700 rounded hover:bg-gray-700"
-              title="Share"
-              onClick={() => { setShowShare(!showShare); setShowAuth(false); }}
-            >
-              🔗 Share
-            </button>
-            <button
-              className="text-sm px-2 py-1 bg-gray-800 border border-gray-700 rounded hover:bg-gray-700"
-              title="Login/Logout"
-              onClick={() => { setShowAuth(!showAuth); setShowShare(false); }}
-            >
-              {loggedIn ? `👤 ${userName}` : "🔐 Login/Logout"}
-            </button>
-          </div>
-        </div>
+  // ---- Render ----
+  return (
+    <>
+      {!loggedIn ? (
+        /* ===== Auth Page (shown when not logged in) ===== */
+        <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white p-4">
+          <div className="w-full max-w-md bg-gray-800 border border-gray-700 rounded-2xl p-6 shadow-xl">
+            <h1 className="text-2xl font-semibold mb-1 text-center">Welcome to LawGPT</h1>
+            <p className="text-sm text-gray-400 mb-6 text-center">Sign in to continue</p>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {messages.map((msg, index) => (
-            <div
-              key={index}
-              className={`p-3 rounded-md max-w-xl whitespace-pre-wrap ${
-                msg.type === "user" ? "bg-white text-black self-end" : "bg-gray-700 self-start"
-              }`}
-            >
-              {msg.text}
+            <div className="flex gap-2 mb-4">
+              <button
+                onClick={() => setAuthMode("signin")}
+                className={"flex-1 px-3 py-2 rounded-md border " + (authMode === "signin" ? "bg-white text-black border-white" : "bg-gray-900 border-gray-700")}
+              >
+                Sign In
+              </button>
+              <button
+                onClick={() => setAuthMode("signup")}
+                className={"flex-1 px-3 py-2 rounded-md border " + (authMode === "signup" ? "bg-white text-black border-white" : "bg-gray-900 border-gray-700")}
+              >
+                Sign Up
+              </button>
             </div>
-          ))}
-          {loading && <div className="text-gray-400">LawGPT is typing...</div>}
+
+            <button
+              onClick={handleGoogleAuth}
+              className="w-full mb-4 px-4 py-2 rounded-md bg-white text-black hover:bg-gray-300 flex items-center justify-center gap-2"
+            >
+              <span>🔵</span> Continue with Google
+            </button>
+
+            <div className="grid gap-2 mb-2">
+              <input
+                type="email"
+                placeholder="Email"
+                className="w-full p-2 rounded-md bg-gray-900 border border-gray-700"
+                value={authEmail}
+                onChange={(e) => setAuthEmail(e.target.value)}
+              />
+              <input
+                type="password"
+                placeholder="Password"
+                className="w-full p-2 rounded-md bg-gray-900 border border-gray-700"
+                value={authPassword}
+                onChange={(e) => setAuthPassword(e.target.value)}
+              />
+            </div>
+
+            {authError && <div className="text-red-400 text-sm mb-2">{authError}</div>}
+
+            {authMode === "signin" ? (
+              <button
+                onClick={() => handleEmailPassword("signin")}
+                className="w-full px-4 py-2 rounded-md bg-blue-500 hover:bg-blue-600"
+              >
+                Sign In
+              </button>
+            ) : (
+              <button
+                onClick={() => handleEmailPassword("signup")}
+                className="w-full px-4 py-2 rounded-md bg-green-500 hover:bg-green-600"
+              >
+                Create Account
+              </button>
+            )}
+
+            <div className="flex items-center justify-between mt-3 text-sm text-gray-400">
+              <button onClick={handleResetPassword} className="underline">Forgot password?</button>
+              <a href="https://firebase.google.com/docs/auth" target="_blank" rel="noreferrer" className="underline">Help</a>
+            </div>
+          </div>
         </div>
-
-        {/* Tool Popup */}
-        {showTools && (
-          <div ref={toolsRef} className="absolute bottom-20 left-20 bg-gray-800 border border-gray-700 p-3 rounded z-10">
-            <ul className="space-y-2 text-sm">
-              <li className="cursor-pointer" onClick={handlePrintLast}>🖨️ Print last chat</li>
-              <li className="cursor-pointer" onClick={handleSaveSession}>💾 Save session as .txt</li>
-            </ul>
+      ) : (
+        /* ===== Main App UI (shown when logged in) ===== */
+        <div className="flex h-screen bg-gray-900 text-white relative">
+          {/* Sidebar */}
+          <div className="w-64 bg-gray-800 p-4 flex flex-col justify-between">
+            <div>
+              <h2 className="text-xl font-bold mb-4">LawGPT</h2>
+              <ul className="space-y-2">
+                <li className="cursor-pointer" onClick={newChat}>+ New Chat</li>
+                <li className="cursor-pointer" onClick={searchChat}>🔍 Search Chat</li>
+                <li className="cursor-pointer" onClick={openLibrary}>📚 Library</li>
+                <li className="cursor-pointer" onClick={openRepository}>📁 Case Repository</li>
+              </ul>
+            </div>
+            <div className="mt-4">
+              <hr className="my-2 border-gray-600" />
+              <p className="text-sm text-gray-400">{userName || "User"} (Free Plan)</p>
+            </div>
           </div>
-        )}
 
-        {/* Share Popup */}
-        {showShare && (
-          <div ref={shareRef} className="absolute top-12 right-4 bg-gray-800 border border-gray-700 p-3 rounded z-20 shadow-lg">
-            <ul className="space-y-2 text-sm">
-              <li className="cursor-pointer" onClick={handleShareSlack}>💬 Slack</li>
-              <li className="cursor-pointer" onClick={handleShareWhatsApp}>📱 WhatsApp</li>
-              <li className="cursor-pointer" onClick={handleShareEmailGmail}>✉️ Gmail</li>
-              <li className="cursor-pointer" onClick={handleShareDrive}>📤 Drive</li>
-            </ul>
+          {/* Chat Panel */}
+          <div className="flex-1 flex flex-col relative">
+            {/* Top Bar */}
+            <div ref={topbarRef} className="flex items-center justify-between px-4 py-2 border-b border-gray-800 bg-gray-900 sticky top-0 z-10">
+              <div className="text-sm text-gray-400">LawGPT Assistant</div>
+              <div className="flex items-center gap-2">
+                <button
+                  className="text-sm px-2 py-1 bg-gray-800 border border-gray-700 rounded hover:bg-gray-700"
+                  title="Share"
+                  onClick={() => { setShowShare(!showShare); }}
+                >
+                  🔗 Share
+                </button>
+                {/* Tools shortcut kept near input as well; optional duplicate here if you want */}
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {messages.map((msg, index) => (
+                <div
+                  key={index}
+                  className={`p-3 rounded-md max-w-xl whitespace-pre-wrap ${msg.type === "user" ? "bg-white text-black self-end" : "bg-gray-700 self-start"}`}
+                >
+                  {msg.text}
+                </div>
+              ))}
+              {loading && <div className="text-gray-400">LawGPT is typing...</div>}
+            </div>
+
+            {/* Tools Popup */}
+            {showTools && (
+              <div ref={toolsRef} className="absolute bottom-20 left-20 bg-gray-800 border border-gray-700 p-3 rounded z-10">
+                <ul className="space-y-2 text-sm">
+                  <li className="cursor-pointer" onClick={handlePrintLast}>🖨️ Print last chat</li>
+                  <li className="cursor-pointer" onClick={handleSaveSession}>💾 Save session as .txt</li>
+                </ul>
+              </div>
+            )}
+
+            {/* Share Popup */}
+            {showShare && (
+              <div ref={shareRef} className="absolute top-12 right-4 bg-gray-800 border border-gray-700 p-3 rounded z-20 shadow-lg">
+                <ul className="space-y-2 text-sm">
+                  <li className="cursor-pointer" onClick={handleShareSlack}>💬 Slack</li>
+                  <li className="cursor-pointer" onClick={handleShareWhatsApp}>📱 WhatsApp</li>
+                  <li className="cursor-pointer" onClick={handleShareEmailGmail}>✉️ Gmail</li>
+                  <li className="cursor-pointer" onClick={handleShareDrive}>📤 Drive</li>
+                </ul>
+              </div>
+            )}
+
+            {/* Input Area */}
+            <div className="p-4 border-t border-gray-700 flex items-center gap-2">
+              <button onClick={() => fileInputRef.current.click()} className="text-lg">➕</button>
+              <input type="file" accept=".pdf" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
+              <button className="text-lg" title="Tools" onClick={() => setShowTools(!showTools)}>🛠️</button>
+              <select
+                className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm"
+                value={selectedLanguage}
+                onChange={(e) => setSelectedLanguage(e.target.value)}
+                title="Recognition language"
+              >
+                {languageOptions.map(opt => (
+                  <option key={opt.code} value={opt.code}>{opt.label}</option>
+                ))}
+              </select>
+              <button className="text-lg" title="Voice" onClick={handleVoiceClick}>
+                {recording ? "⏺️" : "🎙️"}
+              </button>
+              <input
+                className="flex-1 p-2 rounded-md bg-gray-800 border border-gray-700 text-white"
+                placeholder="Ask me anything..."
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSend()}
+              />
+              <button className="px-4 py-2 rounded-md bg-white text-black hover:bg-gray-300" onClick={handleSend}>
+                Send
+              </button>
+            </div>
           </div>
-        )}
-
-        {/* Auth Popup */}
-        {showAuth && (
-          <div ref={authRef} className="absolute top-12 right-4 bg-gray-800 border border-gray-700 p-3 rounded z-30 shadow-lg mt-2">
-            <ul className="space-y-2 text-sm">
-              {!loggedIn && (
-                <>
-                  <li className="cursor-pointer" onClick={startLoginGoogle}>🔵 Login with Google</li>
-                </>
-              )}
-              {loggedIn && (
-                <li className="cursor-pointer text-red-300" onClick={doLogout}>🚪 Logout</li>
-              )}
-            </ul>
-          </div>
-        )}
-
-        {/* Input Area */}
-        <div className="p-4 border-t border-gray-700 flex items-center gap-2">
-          <button onClick={() => fileInputRef.current.click()} className="text-lg">➕</button>
-          <input
-            type="file"
-            accept=".pdf"
-            ref={fileInputRef}
-            onChange={handleFileUpload}
-            className="hidden"
-          />
-          <button className="text-lg" title="Tools" onClick={() => setShowTools(!showTools)}>🛠️</button>
-          <select
-            className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm"
-            value={selectedLanguage}
-            onChange={(e) => setSelectedLanguage(e.target.value)}
-            title="Recognition language"
-          >
-            {languageOptions.map(opt => (
-              <option key={opt.code} value={opt.code}>{opt.label}</option>
-            ))}
-          </select>
-          <button className="text-lg" title="Voice" onClick={handleVoiceClick}>
-            {recording ? "⏺️" : "🎙️"}
-          </button>
-          <input
-            className="flex-1 p-2 rounded-md bg-gray-800 border border-gray-700 text-white"
-            placeholder="Ask me anything..."
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSend()}
-          />
-          <button
-            className="px-4 py-2 rounded-md bg-white text-black hover:bg-gray-300"
-            onClick={handleSend}
-          >
-            Send
-          </button>
         </div>
-      </div>
-    </div>
+      )}
+    </>
   );
 };
+
 
 export default LawGPTApp;
