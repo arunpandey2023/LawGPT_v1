@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { supabase } from "./supabase";
 
@@ -20,6 +20,7 @@ const LawGPTApp = () => {
   const [loading, setLoading] = useState(false);
   const [chatId, setChatId] = useState(Date.now());
   const [sessions, setSessions] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
 
   const loadSessions = async () => {
     const { data, error } = await supabase
@@ -38,6 +39,16 @@ const LawGPTApp = () => {
   useEffect(() => {
     loadSessions();
   }, []);
+
+  const filteredSessions = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+
+    if (!term) return sessions;
+
+    return sessions.filter((session) =>
+      (session.title || "New Chat").toLowerCase().includes(term)
+    );
+  }, [sessions, searchTerm]);
 
   const handleOpenChat = async (sessionId) => {
     const { data, error } = await supabase
@@ -92,6 +103,7 @@ const LawGPTApp = () => {
     setMessages([getWelcomeMessage()]);
     setInput("");
     setLoading(false);
+    setSearchTerm("");
 
     await loadSessions();
 
@@ -312,12 +324,15 @@ const LawGPTApp = () => {
             + New Chat
           </button>
 
-          <button
-            disabled
-            className="w-full cursor-not-allowed rounded-lg bg-gray-800 px-4 py-3 text-left opacity-50"
-          >
-            Search Chat (Coming Soon)
-          </button>
+          <div className="rounded-lg bg-gray-800 p-2">
+            <input
+              type="text"
+              placeholder="Search chat..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full rounded-md bg-gray-900 px-3 py-2 text-sm text-white outline-none placeholder:text-gray-400"
+            />
+          </div>
 
           <button className="w-full rounded-lg bg-gray-800 px-4 py-3 text-left hover:bg-gray-700">
             Case Repository
@@ -330,7 +345,7 @@ const LawGPTApp = () => {
           </div>
 
           <div className="space-y-2">
-            {sessions.map((session) => (
+            {filteredSessions.map((session) => (
               <button
                 key={session.id}
                 onClick={() => handleOpenChat(session.id)}
@@ -339,6 +354,12 @@ const LawGPTApp = () => {
                 {session.title || "New Chat"}
               </button>
             ))}
+
+            {filteredSessions.length === 0 && (
+              <div className="rounded-lg bg-gray-800 px-3 py-2 text-sm text-gray-400">
+                No chats found
+              </div>
+            )}
           </div>
         </div>
 
