@@ -2,6 +2,9 @@ import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { supabase } from "./supabase";
 
+const USER_NAME = "arunpandey2023";
+const USER_PLAN = "Free Plan";
+
 const getWelcomeMessage = () => ({
   id: Date.now(),
   type: "bot",
@@ -14,6 +17,37 @@ const makeChatTitle = (text) => {
   return clean.length > 40 ? `${clean.slice(0, 40)}...` : clean;
 };
 
+const userMenuItems = [
+  { key: "upgrade", label: "Upgrade Plan" },
+  { key: "profile", label: "Profile" },
+  { key: "settings", label: "Settings" },
+  { key: "help", label: "Help" },
+  { key: "logout", label: "Log out" },
+];
+
+const faqs = [
+  ["What is LawGPT?", "LawGPT is an AI legal assistant for Indian law research, summaries, drafting, and case-law assistance."],
+  ["Is LawGPT a lawyer?", "No. LawGPT is an AI assistant and does not replace professional legal advice."],
+  ["Which courts does LawGPT support?", "Currently it focuses on Supreme Court content, with High Courts and District Courts planned."],
+  ["Can I upload PDFs?", "Yes, you can upload legal PDFs for summarization and analysis."],
+  ["Can LawGPT summarize cases?", "Yes, it can summarize facts, issues, holdings, reasoning, and citations when available."],
+  ["Does LawGPT provide citations?", "Yes, where retrieved legal sections are available."],
+  ["Can I draft petitions?", "Drafting support can be added progressively based on your workflow."],
+  ["Can I search previous chats?", "Yes, use the search box in the left panel."],
+  ["Are my chats saved?", "Yes, chats are saved in Supabase."],
+  ["Can I delete chats?", "This can be added next."],
+  ["What is Plus plan?", "Plus gives higher usage limits and better legal research capacity."],
+  ["What is Unlimited plan?", "Unlimited is for heavy users needing extended usage and priority features."],
+  ["Can lawyers use LawGPT?", "Yes, lawyers can use it for research acceleration and drafting support."],
+  ["Can judges use LawGPT?", "It can assist with research, summaries, and document review support."],
+  ["Can startups use LawGPT?", "Yes, startups can use it for basic legal research and contract understanding."],
+  ["Does LawGPT work in Indian law only?", "The product is currently focused on the Indian legal ecosystem."],
+  ["Can LawGPT hallucinate?", "Yes, like any AI system. Always verify important legal outputs."],
+  ["Can I change answer style?", "This can be added later in Settings."],
+  ["How do I upgrade?", "Use the Upgrade Plan screen."],
+  ["How do I get support?", "Use the Help section or contact LawGPT support."],
+];
+
 const LawGPTApp = () => {
   const [messages, setMessages] = useState([getWelcomeMessage()]);
   const [input, setInput] = useState("");
@@ -21,6 +55,12 @@ const LawGPTApp = () => {
   const [chatId, setChatId] = useState(Date.now());
   const [sessions, setSessions] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [activeUserPanel, setActiveUserPanel] = useState(null);
+
+  const closePanel = () => {
+    setActiveUserPanel(null);
+  };
 
   const loadSessions = async () => {
     const { data, error } = await supabase
@@ -42,7 +82,6 @@ const LawGPTApp = () => {
 
   const filteredSessions = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-
     if (!term) return sessions;
 
     return sessions.filter((session) =>
@@ -76,6 +115,7 @@ const LawGPTApp = () => {
     );
     setInput("");
     setLoading(false);
+    setActiveUserPanel(null);
   };
 
   const handleNewChat = async () => {
@@ -96,18 +136,42 @@ const LawGPTApp = () => {
       return;
     }
 
-    const sessionId = data.id;
-    window.currentSessionId = sessionId;
-
+    window.currentSessionId = data.id;
     setChatId(Date.now());
     setMessages([getWelcomeMessage()]);
     setInput("");
     setLoading(false);
     setSearchTerm("");
-
+    setActiveUserPanel(null);
     await loadSessions();
+  };
 
-    console.log("Created session:", sessionId);
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      window.currentSessionId = null;
+      setMessages([getWelcomeMessage()]);
+      setActiveUserPanel(null);
+      setShowUserMenu(false);
+      alert("Logged out successfully");
+    } catch (error) {
+      console.error("Logout failed:", error);
+      alert("Logout failed");
+    }
+  };
+
+  const handleMenuClick = (key) => {
+    if (key === "logout") {
+      handleLogout();
+      return;
+    }
+
+    setActiveUserPanel(key);
+    setShowUserMenu(false);
+  };
+
+  const handleSave = () => {
+    setActiveUserPanel(null);
   };
 
   const handleSend = async () => {
@@ -121,55 +185,41 @@ const LawGPTApp = () => {
       return;
     }
 
-    const userMessage = {
-      id: Date.now(),
-      type: "user",
-      text: currentInput,
-    };
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: Date.now(),
+        type: "user",
+        text: currentInput,
+      },
+    ]);
 
-    setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setLoading(true);
+    setActiveUserPanel(null);
 
-    const { error: userMessageError } = await supabase
+    await supabase.from("chat_messages").insert([
+      {
+        session_id: sessionId,
+        sender: "user",
+        message_text: currentInput,
+      },
+    ]);
+
+    const { data: existingMessages } = await supabase
       .from("chat_messages")
-      .insert([
-        {
-          session_id: sessionId,
-          sender: "user",
-          message_text: currentInput,
-        },
-      ]);
-
-    if (userMessageError) {
-      console.error("Error saving user message:", userMessageError);
-    }
-
-    const { data: existingMessages, error: existingMessagesError } =
-      await supabase
-        .from("chat_messages")
-        .select("id")
-        .eq("session_id", sessionId)
-        .eq("sender", "user");
-
-    if (existingMessagesError) {
-      console.error("Error checking existing messages:", existingMessagesError);
-    }
+      .select("id")
+      .eq("session_id", sessionId)
+      .eq("sender", "user");
 
     if (existingMessages && existingMessages.length === 1) {
-      const newTitle = makeChatTitle(currentInput);
-
-      const { error: titleUpdateError } = await supabase
+      await supabase
         .from("chat_sessions")
         .update({
-          title: newTitle,
+          title: makeChatTitle(currentInput),
           updated_at: new Date().toISOString(),
         })
         .eq("id", sessionId);
-
-      if (titleUpdateError) {
-        console.error("Error updating chat title:", titleUpdateError);
-      }
     } else {
       await supabase
         .from("chat_sessions")
@@ -196,19 +246,13 @@ const LawGPTApp = () => {
         payload?.response ||
         "Sorry, I couldn't understand that.";
 
-      const { error: botMessageError } = await supabase
-        .from("chat_messages")
-        .insert([
-          {
-            session_id: sessionId,
-            sender: "bot",
-            message_text: botMessage,
-          },
-        ]);
-
-      if (botMessageError) {
-        console.error("Error saving bot message:", botMessageError);
-      }
+      await supabase.from("chat_messages").insert([
+        {
+          session_id: sessionId,
+          sender: "bot",
+          message_text: botMessage,
+        },
+      ]);
 
       await supabase
         .from("chat_sessions")
@@ -253,7 +297,9 @@ const LawGPTApp = () => {
         text: `Uploaded: ${file.name}`,
       },
     ]);
+
     setLoading(true);
+    setActiveUserPanel(null);
 
     const formData = new FormData();
     formData.append("file", file);
@@ -312,120 +358,342 @@ const LawGPTApp = () => {
     }
   };
 
-  return (
-    <div className="flex h-screen bg-gray-100 text-gray-900">
-      <aside className="w-72 bg-gray-900 text-white p-5 flex flex-col">
-        <h1 className="text-2xl font-bold mb-6">LawGPT</h1>
+  const PageShell = ({ title, children, showActions = false }) => (
+    <div className="mx-auto max-w-5xl">
+      <div className="mb-6 flex items-center justify-between border-b pb-4">
+        <h2 className="text-3xl font-semibold">{title}</h2>
+        <button
+          onClick={closePanel}
+          className="rounded-full px-3 py-1 text-3xl leading-none text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+        >
+          ×
+        </button>
+      </div>
 
-        <div className="space-y-3">
+      {children}
+
+      {showActions && (
+        <div className="mt-8 flex justify-end gap-3 border-t pt-4">
+          <button
+            onClick={closePanel}
+            className="rounded-xl border px-5 py-2 text-sm hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            className="rounded-xl bg-blue-600 px-5 py-2 text-sm text-white hover:bg-blue-700"
+          >
+            Save
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderUserPanel = () => {
+    if (activeUserPanel === "upgrade") {
+      return (
+        <PageShell title="Upgrade your LawGPT plan">
+          <p className="mb-6 text-gray-600">
+            Choose a plan based on your legal research usage.
+          </p>
+
+          <div className="grid gap-6 md:grid-cols-2">
+            <div className="rounded-2xl border bg-white p-6 shadow-sm">
+              <h3 className="text-2xl font-semibold">Plus</h3>
+              <p className="mt-2 text-4xl font-bold">₹999</p>
+              <p className="mb-5 text-sm text-gray-500">per month</p>
+              <ul className="space-y-3 text-sm text-gray-700">
+                <li>✓ Higher chat limits</li>
+                <li>✓ Case-law summarization</li>
+                <li>✓ PDF upload support</li>
+                <li>✓ Saved chat history</li>
+                <li>✓ Priority legal research features</li>
+              </ul>
+              <button className="mt-6 w-full rounded-xl bg-gray-900 px-4 py-3 text-white hover:bg-gray-800">
+                Upgrade to Plus
+              </button>
+            </div>
+
+            <div className="rounded-2xl border-2 border-blue-600 bg-white p-6 shadow-sm">
+              <div className="mb-2 inline-block rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
+                Best for heavy users
+              </div>
+              <h3 className="text-2xl font-semibold">Unlimited</h3>
+              <p className="mt-2 text-4xl font-bold">₹1999</p>
+              <p className="mb-5 text-sm text-gray-500">per month</p>
+              <ul className="space-y-3 text-sm text-gray-700">
+                <li>✓ Unlimited legal queries</li>
+                <li>✓ Longer legal documents</li>
+                <li>✓ Advanced case analysis</li>
+                <li>✓ Priority response speed</li>
+                <li>✓ Early access to new LawGPT features</li>
+              </ul>
+              <button className="mt-6 w-full rounded-xl bg-blue-600 px-4 py-3 text-white hover:bg-blue-700">
+                Upgrade to Unlimited
+              </button>
+            </div>
+          </div>
+        </PageShell>
+      );
+    }
+
+    if (activeUserPanel === "profile") {
+      return (
+        <PageShell title="Profile" showActions>
+          <div className="rounded-2xl border bg-white p-6 shadow-sm">
+            <div className="flex items-center gap-4">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-600 text-2xl font-bold text-white">
+                A
+              </div>
+              <div>
+                <p className="text-xl font-semibold">{USER_NAME}</p>
+                <p className="text-sm text-gray-500">{USER_PLAN}</p>
+              </div>
+            </div>
+          </div>
+        </PageShell>
+      );
+    }
+
+    if (activeUserPanel === "settings") {
+      return (
+        <PageShell title="Settings" showActions>
+          <div className="space-y-6">
+            <section>
+              <h3 className="mb-2 text-lg font-semibold">General</h3>
+              <div className="divide-y rounded-xl border bg-white">
+                <div className="flex items-center justify-between p-4">
+                  <span>Theme</span>
+                  <span className="text-sm text-gray-500">System default</span>
+                </div>
+                <div className="flex items-center justify-between p-4">
+                  <span>Language</span>
+                  <span className="text-sm text-gray-500">English</span>
+                </div>
+              </div>
+            </section>
+
+            <section>
+              <h3 className="mb-2 text-lg font-semibold">LawGPT Preferences</h3>
+              <div className="divide-y rounded-xl border bg-white">
+                <div className="flex items-center justify-between p-4">
+                  <span>Default jurisdiction</span>
+                  <span className="text-sm text-gray-500">India</span>
+                </div>
+                <div className="flex items-center justify-between p-4">
+                  <span>Preferred court</span>
+                  <span className="text-sm text-gray-500">
+                    Supreme Court of India
+                  </span>
+                </div>
+                <div className="flex items-center justify-between p-4">
+                  <span>Answer style</span>
+                  <span className="text-sm text-gray-500">
+                    Structured legal summary
+                  </span>
+                </div>
+                <div className="flex items-center justify-between p-4">
+                  <span>Citation mode</span>
+                  <span className="text-sm text-gray-500">Enabled</span>
+                </div>
+              </div>
+            </section>
+
+            <section>
+              <h3 className="mb-2 text-lg font-semibold">Data Controls</h3>
+              <div className="divide-y rounded-xl border bg-white">
+                <div className="flex items-center justify-between p-4">
+                  <span>Chat history</span>
+                  <span className="text-sm text-gray-500">Enabled</span>
+                </div>
+                <div className="flex items-center justify-between p-4">
+                  <span>Uploaded document retention</span>
+                  <span className="text-sm text-gray-500">Default</span>
+                </div>
+              </div>
+            </section>
+          </div>
+        </PageShell>
+      );
+    }
+
+    if (activeUserPanel === "help") {
+      return (
+        <PageShell title="LawGPT Help Center">
+          <p className="mb-6 text-gray-600">
+            Top questions about using LawGPT.
+          </p>
+
+          <div className="space-y-3">
+            {faqs.map(([q, a], index) => (
+              <details
+                key={q}
+                className="rounded-xl border bg-white p-4 shadow-sm"
+              >
+                <summary className="cursor-pointer font-medium">
+                  {index + 1}. {q}
+                </summary>
+                <p className="mt-3 text-sm text-gray-600">{a}</p>
+              </details>
+            ))}
+          </div>
+        </PageShell>
+      );
+    }
+
+    return null;
+  };
+
+  return (
+    <div className="flex h-screen bg-white text-gray-900">
+      <aside className="flex w-72 flex-col bg-gray-950 text-white">
+        <div className="p-4">
+          <h1 className="mb-4 text-xl font-bold">LawGPT</h1>
+
           <button
             onClick={handleNewChat}
-            className="w-full rounded-lg bg-gray-800 px-4 py-3 text-left hover:bg-gray-700"
+            className="mb-3 w-full rounded-lg bg-white px-4 py-2 text-left text-sm font-medium text-gray-900 hover:bg-gray-200"
           >
             + New Chat
           </button>
 
-          <div className="rounded-lg bg-gray-800 p-2">
-            <input
-              type="text"
-              placeholder="Search chat..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-md bg-gray-900 px-3 py-2 text-sm text-white outline-none placeholder:text-gray-400"
-            />
-          </div>
+          <input
+            value={searchTerm}
+            placeholder="Search chats"
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full rounded-md bg-gray-900 px-3 py-2 text-sm text-white outline-none placeholder:text-gray-400"
+          />
         </div>
 
-        <div className="mt-6 flex-1 overflow-y-auto">
-          <div className="mb-2 text-xs uppercase tracking-wide text-gray-400">
-            Recent Chats
-          </div>
+        <div className="flex-1 overflow-y-auto px-4">
+          <p className="mb-2 text-xs uppercase text-gray-500">Recent Chats</p>
 
-          <div className="space-y-2">
-            {filteredSessions.map((session) => (
-              <button
-                key={session.id}
-                onClick={() => handleOpenChat(session.id)}
-                className="w-full rounded-lg bg-gray-800 px-3 py-2 text-left text-sm hover:bg-gray-700"
-              >
-                {session.title || "New Chat"}
-              </button>
-            ))}
+          {filteredSessions.map((session) => (
+            <button
+              key={session.id}
+              onClick={() => handleOpenChat(session.id)}
+              className="mb-2 w-full rounded-lg bg-gray-800 px-3 py-2 text-left text-sm hover:bg-gray-700"
+            >
+              {session.title || "New Chat"}
+            </button>
+          ))}
 
-            {filteredSessions.length === 0 && (
-              <div className="rounded-lg bg-gray-800 px-3 py-2 text-sm text-gray-400">
-                No chats found
+          {filteredSessions.length === 0 && (
+            <p className="text-sm text-gray-500">No chats found</p>
+          )}
+        </div>
+
+        <div className="relative border-t border-gray-800 p-3">
+          {showUserMenu && (
+            <div className="absolute bottom-20 left-3 right-3 z-50 rounded-2xl border border-gray-700 bg-gray-900 p-2 shadow-2xl">
+              <div className="border-b border-gray-700 px-3 py-3">
+                <p className="text-sm font-semibold">{USER_NAME}</p>
+                <p className="text-xs text-gray-400">{USER_PLAN}</p>
               </div>
-            )}
-          </div>
-        </div>
 
-        <div className="mt-auto border-t border-gray-700 pt-4 text-sm text-gray-300">
-          arunpandey2023 (Free Plan)
+              <div className="py-2">
+                {userMenuItems.map((item) => (
+                  <button
+                    key={item.key}
+                    onClick={() => handleMenuClick(item.key)}
+                    className={`w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-gray-800 ${
+                      item.key === "logout" ? "text-red-300" : ""
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <button
+            onClick={() => setShowUserMenu((prev) => !prev)}
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-gray-800"
+          >
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-sm font-bold">
+              A
+            </div>
+            <div>
+              <p className="text-sm font-medium">{USER_NAME}</p>
+              <p className="text-xs text-gray-400">{USER_PLAN}</p>
+            </div>
+          </button>
         </div>
       </aside>
 
-      <main key={chatId} className="flex-1 flex flex-col">
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          {messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`max-w-3xl rounded-2xl px-4 py-3 whitespace-pre-wrap shadow-sm ${
-                msg.type === "user"
-                  ? "ml-auto bg-blue-600 text-white"
-                  : "mr-auto bg-white text-gray-900"
-              }`}
-            >
-              {msg.text}
-            </div>
-          ))}
+      <main className="flex flex-1 flex-col">
+        <div className="flex-1 overflow-y-auto p-6">
+          {activeUserPanel ? (
+            renderUserPanel()
+          ) : (
+            <div className="mx-auto max-w-3xl space-y-4">
+              {messages.map((msg) => (
+                <div
+                  key={msg.id}
+                  className={`rounded-2xl px-4 py-3 ${
+                    msg.type === "user"
+                      ? "ml-auto max-w-xl bg-blue-600 text-white"
+                      : "mr-auto max-w-xl bg-gray-100 text-gray-900"
+                  }`}
+                >
+                  <pre className="whitespace-pre-wrap font-sans text-sm">
+                    {msg.text}
+                  </pre>
+                </div>
+              ))}
 
-          {loading && (
-            <div className="mr-auto max-w-3xl rounded-2xl bg-white px-4 py-3 text-gray-500 shadow-sm">
-              LawGPT is typing...
+              {loading && (
+                <div className="mr-auto max-w-xl rounded-2xl bg-gray-100 px-4 py-3 text-sm text-gray-600">
+                  LawGPT is typing...
+                </div>
+              )}
             </div>
           )}
         </div>
 
-        <div className="border-t bg-white p-4">
-          <div className="flex items-center gap-3">
-            <label className="cursor-pointer rounded-lg border px-4 py-2 text-sm hover:bg-gray-50">
-              Upload PDF
-              <input
-                type="file"
-                accept=".pdf"
-                onChange={handleFileUpload}
-                className="hidden"
+        {!activeUserPanel && (
+          <div className="border-t p-4">
+            <div className="mx-auto flex max-w-3xl gap-3">
+              <label className="cursor-pointer rounded-lg border px-4 py-3 text-sm hover:bg-gray-50">
+                Upload PDF
+                <input
+                  type="file"
+                  accept=".pdf"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+              </label>
+
+              <textarea
+                value={input}
+                placeholder="Ask LawGPT..."
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className="min-h-[48px] flex-1 resize-none rounded-lg border px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
               />
-            </label>
 
-            <textarea
-              className="flex-1 resize-none rounded-lg border px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
-              rows={2}
-              placeholder="Ask LawGPT about a case..."
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-            />
+              <button
+                onClick={handleSend}
+                disabled={loading}
+                className="rounded-lg bg-blue-600 px-5 py-3 text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                Send
+              </button>
+            </div>
 
-            <button
-              onClick={handleSend}
-              disabled={loading}
-              className="rounded-lg bg-blue-600 px-5 py-3 text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              Send
-            </button>
+            <div className="mx-auto mt-3 flex max-w-3xl gap-3 text-sm text-gray-500">
+              <button className="rounded-lg border px-3 py-2 hover:bg-gray-50">
+                Tools
+              </button>
+              <button className="rounded-lg border px-3 py-2 hover:bg-gray-50">
+                Voice
+              </button>
+            </div>
           </div>
-
-          <div className="mt-3 flex gap-3 text-sm text-gray-500">
-            <button className="rounded-lg border px-3 py-2 hover:bg-gray-50">
-              Tools
-            </button>
-            <button className="rounded-lg border px-3 py-2 hover:bg-gray-50">
-              Voice
-            </button>
-          </div>
-        </div>
+        )}
       </main>
     </div>
   );
