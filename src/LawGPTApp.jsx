@@ -319,11 +319,13 @@ const LawGPTApp = () => {
         : response.data;
 
       const botMessage =
-        payload?.answer ||
-        payload?.message?.content ||
-        payload?.content ||
-        payload?.response ||
-        "Sorry, I couldn't understand that.";
+        payload?.contract ||
+		payload?.answer ||
+		payload?.message?.content ||
+		payload?.content ||
+		payload?.response ||
+		payload?.text ||
+		"Sorry, I couldn't understand that.";
 
       await supabase.from("chat_messages").insert([
         {
