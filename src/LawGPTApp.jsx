@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { supabase } from "./supabase";
+import Auth from "./Auth";
 
 const USER_NAME = "arunpandey2023";
 const USER_PLAN = "Free Plan";
@@ -49,6 +50,8 @@ const faqs = [
 ];
 
 const LawGPTApp = () => {
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [messages, setMessages] = useState([getWelcomeMessage()]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -58,14 +61,47 @@ const LawGPTApp = () => {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [activeUserPanel, setActiveUserPanel] = useState(null);
 
+  useEffect(() => {
+    let mounted = true;
+
+    supabase.auth.getUser().then(({ data, error }) => {
+      if (!mounted) return;
+
+      if (error) {
+        console.error("Error getting user:", error);
+      }
+
+      setUser(data?.user || null);
+      setAuthLoading(false);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setUser(session?.user || null);
+        setAuthLoading(false);
+      }
+    );
+
+    return () => {
+      mounted = false;
+      listener?.subscription?.unsubscribe();
+    };
+  }, []);
+
   const closePanel = () => {
     setActiveUserPanel(null);
   };
 
   const loadSessions = async () => {
+    if (!user?.id) {
+      setSessions([]);
+      return;
+    }
+
     const { data, error } = await supabase
       .from("chat_sessions")
       .select("*")
+      .eq("user_id", user.id)
       .order("updated_at", { ascending: false });
 
     if (error) {
@@ -77,8 +113,10 @@ const LawGPTApp = () => {
   };
 
   useEffect(() => {
-    loadSessions();
-  }, []);
+    if (user?.id) {
+      loadSessions();
+    }
+  }, [user]);
 
   const filteredSessions = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -90,6 +128,14 @@ const LawGPTApp = () => {
   }, [sessions, searchTerm]);
 
   const handleOpenChat = async (sessionId) => {
+    if (!user?.id) return;
+
+    const selectedSession = sessions.find((session) => session.id === sessionId);
+    if (!selectedSession || selectedSession.user_id !== user.id) {
+      alert("You are not allowed to open this chat.");
+      return;
+    }
+
     const { data, error } = await supabase
       .from("chat_messages")
       .select("*")
@@ -119,11 +165,16 @@ const LawGPTApp = () => {
   };
 
   const handleNewChat = async () => {
+    if (!user?.id) {
+      alert("Please log in first");
+      return;
+    }
+
     const { data, error } = await supabase
       .from("chat_sessions")
       .insert([
         {
-          user_id: "test-user",
+          user_id: user.id,
           title: "New Chat",
         },
       ])
@@ -153,6 +204,8 @@ const LawGPTApp = () => {
       setMessages([getWelcomeMessage()]);
       setActiveUserPanel(null);
       setShowUserMenu(false);
+      setUser(null);
+      setSessions([]);
       alert("Logged out successfully");
     } catch (error) {
       console.error("Logout failed:", error);
@@ -178,6 +231,12 @@ const LawGPTApp = () => {
     if (!input.trim() || loading) return;
 
     const currentInput = input.trim();
+
+    if (!user?.id) {
+      alert("Please log in first");
+      return;
+    }
+
     const sessionId = window.currentSessionId;
 
     if (!sessionId) {
@@ -230,9 +289,29 @@ const LawGPTApp = () => {
     await loadSessions();
 
     try {
+      const { data: attachments, error: attachmentsError } = await supabase
+        .from("chat_attachments")
+        .select("file_name, file_type, file_size, file_url")
+        .eq("session_id", sessionId)
+        .eq("user_id", user.id);
+
+      if (attachmentsError) {
+        console.error("Error loading attachments:", attachmentsError);
+      }
+
       const response = await axios.post(
-        "https://mailabs.app.n8n.cloud/webhook/query",
-        { message: currentInput }
+        import.meta.env.VITE_N8N_QUERY_URL,
+        {
+          message: currentInput,
+          session_id: sessionId,
+          user_id: user.id,
+          attachments: attachments || [],
+        },
+        {
+          headers: {
+            "x-lawgpt-secret": import.meta.env.VITE_LAWGPT_WEBHOOK_SECRET,
+          },
+        }
       );
 
       const payload = Array.isArray(response.data)
@@ -289,49 +368,95 @@ const LawGPTApp = () => {
     const file = e.target.files[0];
     if (!file || loading) return;
 
+    if (!user?.id) {
+      alert("Please log in first");
+      e.target.value = "";
+      return;
+    }
+
+    const sessionId = window.currentSessionId;
+
+    if (!sessionId) {
+      alert("Please click + New Chat first before uploading a document");
+      e.target.value = "";
+      return;
+    }
+
+    if (file.type !== "application/pdf") {
+      alert("Only PDF files are allowed");
+      e.target.value = "";
+      return;
+    }
+
+    const maxFileSizeMb = 20;
+    const maxFileSizeBytes = maxFileSizeMb * 1024 * 1024;
+
+    if (file.size > maxFileSizeBytes) {
+      alert(`File is too large. Maximum allowed size is ${maxFileSizeMb} MB.`);
+      e.target.value = "";
+      return;
+    }
+
     setMessages((prev) => [
       ...prev,
       {
         id: Date.now(),
         type: "user",
-        text: `Uploaded: ${file.name}`,
+        text: `Attached document: ${file.name}`,
       },
     ]);
 
     setLoading(true);
     setActiveUserPanel(null);
 
-    const formData = new FormData();
-    formData.append("file", file);
-
     try {
-      const response = await axios.post(
-        "https://mailabs.app.n8n.cloud/webhook-test/summary",
-        formData,
-        {
-          headers: {
-            "Content-Type": "multipart/form-data",
+      const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const filePath = `${user.id}/${sessionId}/${Date.now()}_${safeFileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("lawgpt-docs")
+        .upload(filePath, file, {
+          contentType: file.type,
+          upsert: false,
+        });
+
+      if (uploadError) {
+        console.error("Storage upload failed:", uploadError);
+        alert("File upload failed");
+        return;
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from("lawgpt-docs")
+        .getPublicUrl(filePath);
+
+      const fileUrl = publicUrlData?.publicUrl || null;
+
+      const { error: attachmentError } = await supabase
+        .from("chat_attachments")
+        .insert([
+          {
+            user_id: user.id,
+            session_id: sessionId,
+            file_name: file.name,
+            file_type: file.type,
+            file_size: file.size,
+            file_url: fileUrl,
           },
-        }
-      );
+        ]);
 
-      const payload = Array.isArray(response.data)
-        ? response.data[0]
-        : response.data;
-
-      const botMessage =
-        payload?.answer ||
-        payload?.content ||
-        payload?.message?.content ||
-        payload?.response ||
-        "File uploaded. Processing completed.";
+      if (attachmentError) {
+        console.error("Attachment metadata save failed:", attachmentError);
+        alert("File uploaded but metadata save failed");
+        return;
+      }
 
       setMessages((prev) => [
         ...prev,
         {
           id: Date.now() + 1,
           type: "bot",
-          text: botMessage,
+          text: `${file.name} is attached to this chat. Ask a question and I will use it along with LawGPT retrieval.`,
         },
       ]);
     } catch (error) {
@@ -545,6 +670,18 @@ const LawGPTApp = () => {
 
     return null;
   };
+
+  if (authLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-white text-gray-600">
+        Loading LawGPT...
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Auth />;
+  }
 
   return (
     <div className="flex h-screen bg-white text-gray-900">
